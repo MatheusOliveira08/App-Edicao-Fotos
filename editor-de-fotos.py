@@ -54,11 +54,42 @@ def aplicar_filtros_pb(tipo_filtro):
     elif tipo_filtro == 1:
         img_filtrada = cv2.medianBlur(img_carregada, 5)
     elif tipo_filtro == 2:
-        img_filtrada = cv2.GaussianBlur(img_carregada, (5,5), 2)
+        img_filtrada = gaussiano_manual(img_carregada, 5, 2)
     else:
         return
     
     exibir_imagem(img_filtrada)
+
+"""
+def mediana_manual(img, tamanho_janela=3):
+    img_mediana = np.copy(img)
+
+    margem = tamanho_janela // 2 # Calcula a margem de cada janela para não processar bordas
+
+    # Percorre a imagem excluindo a margem
+    for i in range(margem, img.shape[0] - margem):
+        for j in range(margem, img.shape[1] - margem):
+            # Extrai a janela de vizinhança
+            janela = img[i - margem:i + margem + 1, j - margem:j + margem + 1]
+
+            # Calcula a mediana e define no pixel central
+            img_mediana[i, j] = np.median(janela)
+
+    return img_mediana
+"""
+
+def criar_kernel_gaussiano(tamanho, sigma):
+    eixo = np.linspace(-(tamanho // 2), tamanho // 2, tamanho) #coordenadas em relação ao centro
+    x, y = np.meshgrid(eixo, eixo) #grid com coordenadas
+    kernel = np.exp(-(x**2 + y**2) / (2 * sigma**2)) 
+    kernel = kernel / np.sum(kernel)  # Normaliza para a soma ser 1 para preservar a intensidade
+    return kernel
+
+def gaussiano_manual(img, tamanho=3, sigma=1):
+    kernel_gaussiano = criar_kernel_gaussiano(tamanho, sigma)
+    img_gaussiano = cv2.filter2D(img, -1, kernel_gaussiano)
+
+    return img_gaussiano
 
 def aplicar_filtros_pa(tipo_filtro):
     if img_carregada is None:
@@ -67,7 +98,7 @@ def aplicar_filtros_pa(tipo_filtro):
     laplaciano_kernel = np.array([[-1, -1, -1], #8-conectividade (Diagonais Incluídas)
                                   [-1, 8, -1],
                                   [-1, -1, -1]])
-    
+      
     if tipo_filtro == 0:
         sobel_x = cv2.Sobel(img_carregada, cv2.CV_64F, 1, 0, ksize=3)
         img_filtrada = cv2.convertScaleAbs(sobel_x)
