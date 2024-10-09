@@ -2,6 +2,7 @@ import tkinter as tk #fornece uma interface gráfica para interagir com o usuár
 from tkinter import filedialog #abre o explorador de arquivos para selecionar
 import cv2 #biblioteca para processamento de imagens (manipula imagens/vídeos)
 from PIL import Image, ImageTk #abrir, manipular e processar imagens | Coverte imagens para um formato que o tkinter consegue exibir
+import numpy as np
 
 def carregar_imagem(flag = None):
     global img_carregada
@@ -62,6 +63,11 @@ def aplicar_filtros_pb(tipo_filtro):
 def aplicar_filtros_pa(tipo_filtro):
     if img_carregada is None:
         return
+
+    laplaciano_kernel = np.array([[-1, -1, -1], #8-conectividade (Diagonais Incluídas)
+                                  [-1, 8, -1],
+                                  [-1, -1, -1]])
+    
     if tipo_filtro == 0:
         sobel_x = cv2.Sobel(img_carregada, cv2.CV_64F, 1, 0, ksize=3)
         img_filtrada = cv2.convertScaleAbs(sobel_x)
@@ -75,7 +81,7 @@ def aplicar_filtros_pa(tipo_filtro):
     elif tipo_filtro == 3:
         img_filtrada = cv2.Canny(img_carregada, 50, 100) #descarta < threshold1, borda válida > threshold2, entre: só se conectado a bordas fortes
     elif tipo_filtro == 4:
-        img_filtrada = cv2.Laplacian(img_carregada, cv2.CV_64F) #CV_64F constante de ponto flutuante para evitar overflow no calculo das bordas
+        img_filtrada = cv2.filter2D(img_carregada, cv2.CV_64F, laplaciano_kernel) #CV_64F constante de ponto flutuante para evitar overflow no calculo das bordas
         img_filtrada = cv2.convertScaleAbs(img_filtrada) #converte para 8 bits para visualização 
     else:
         return
