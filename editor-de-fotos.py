@@ -3,6 +3,9 @@ from tkinter import filedialog #abre o explorador de arquivos para selecionar
 import cv2 #biblioteca para processamento de imagens (manipula imagens/vídeos)
 from PIL import Image, ImageTk #abrir, manipular e processar imagens | Coverte imagens para um formato que o tkinter consegue exibir
 import numpy as np
+import filtros as f
+import segmentacao as s
+import morfologia as m
 
 def carregar_imagem(flag = None):
     global img_carregada
@@ -17,8 +20,8 @@ def carregar_imagem(flag = None):
         exibir_imagem(img_carregada, eh_original=True)
         limpar_tela()
 
-def exibir_imagem(img_carregada, eh_original = False):
-    img_rgb = cv2.cvtColor(img_carregada, cv2.COLOR_BGR2RGB) #converte de BRG (padrão do OpenCV) para RGB para poder mexer com o PIL e o tkinter
+def exibir_imagem(img, eh_original = False):
+    img_rgb = cv2.cvtColor(img, cv2.COLOR_BGR2RGB) #converte de BRG (padrão do OpenCV) para RGB para poder mexer com o PIL e o tkinter
 
     #proporções da tela
     largura_maxima = 500
@@ -50,74 +53,96 @@ def aplicar_filtros_pb(tipo_filtro):
     if img_carregada is None:
         return
     if tipo_filtro == 0:
-        img_filtrada = cv2.blur(img_carregada, (15,15))
+        img_filtrada = f.filtro_media(img_carregada, 5)
     elif tipo_filtro == 1:
-        img_filtrada = cv2.medianBlur(img_carregada, 5)
+        img_filtrada = f.filtro_mediana(img_carregada, 5)
     elif tipo_filtro == 2:
-        img_filtrada = gaussiano_manual(img_carregada, 5, 2)
+        img_filtrada = f.filtro_gauss(img_carregada, 5, 1)
     else:
         return
     
     exibir_imagem(img_filtrada)
 
-"""
-def mediana_manual(img, tamanho_janela=3):
-    img_mediana = np.copy(img)
-
-    margem = tamanho_janela // 2 # Calcula a margem de cada janela para não processar bordas
-
-    # Percorre a imagem excluindo a margem
-    for i in range(margem, img.shape[0] - margem):
-        for j in range(margem, img.shape[1] - margem):
-            # Extrai a janela de vizinhança
-            janela = img[i - margem:i + margem + 1, j - margem:j + margem + 1]
-
-            # Calcula a mediana e define no pixel central
-            img_mediana[i, j] = np.median(janela)
-
-    return img_mediana
-"""
-
-def criar_kernel_gaussiano(tamanho, sigma):
-    eixo = np.linspace(-(tamanho // 2), tamanho // 2, tamanho) #coordenadas em relação ao centro
-    x, y = np.meshgrid(eixo, eixo) #grid com coordenadas
-    kernel = np.exp(-(x**2 + y**2) / (2 * sigma**2)) 
-    kernel = kernel / np.sum(kernel)  # Normaliza para a soma ser 1 para preservar a intensidade
-    return kernel
-
-def gaussiano_manual(img, tamanho=3, sigma=1):
-    kernel_gaussiano = criar_kernel_gaussiano(tamanho, sigma)
-    img_gaussiano = cv2.filter2D(img, -1, kernel_gaussiano)
-
-    return img_gaussiano
-
 def aplicar_filtros_pa(tipo_filtro):
     if img_carregada is None:
         return
-
-    laplaciano_kernel = np.array([[-1, -1, -1], #8-conectividade (Diagonais Incluídas)
-                                  [-1, 8, -1],
-                                  [-1, -1, -1]])
       
     if tipo_filtro == 0:
-        sobel_x = cv2.Sobel(img_carregada, cv2.CV_64F, 1, 0, ksize=3)
-        img_filtrada = cv2.convertScaleAbs(sobel_x)
+        img_filtrada = f.filtro_sobel(img_carregada, 3)
     elif tipo_filtro == 1:
-        sobel_y = cv2.Sobel(img_carregada, cv2.CV_64F, 0, 1, ksize=3)
-        img_filtrada = cv2.convertScaleAbs(sobel_y)
+        img_filtrada = f.filtro_canny(img_carregada, 10, 50)
     elif tipo_filtro == 2:
-        sobel_x = cv2.Sobel(img_carregada, cv2.CV_64F, 1, 0, ksize=3)  #direção horizontal
-        sobel_y = cv2.Sobel(img_carregada, cv2.CV_64F, 0, 1, ksize=3)  #direção vertical
-        img_filtrada = cv2.addWeighted(cv2.convertScaleAbs(sobel_x), 0.5, cv2.convertScaleAbs(sobel_y), 0.5, 0) #combina as bordas
-    elif tipo_filtro == 3:
-        img_filtrada = cv2.Canny(img_carregada, 50, 100) #descarta < threshold1, borda válida > threshold2, entre: só se conectado a bordas fortes
-    elif tipo_filtro == 4:
-        img_filtrada = cv2.filter2D(img_carregada, cv2.CV_64F, laplaciano_kernel) #CV_64F constante de ponto flutuante para evitar overflow no calculo das bordas
-        img_filtrada = cv2.convertScaleAbs(img_filtrada) #converte para 8 bits para visualização 
+        img_filtrada = f.filtro_laplaciano(img_carregada, "intensa")
     else:
         return
 
     exibir_imagem(img_filtrada)
+
+def aplicar_limiarizacao(tipo_limiarizacao):
+    if img_carregada is None:
+        return
+
+    if tipo_limiarizacao == 0:
+        limiar_global = s.calcular_limiar_global(img_carregada)
+        img_segmentada = s.limiarizacao_binaria(img_carregada, limiar_global)
+    elif tipo_limiarizacao == 1:
+        img_segmentada = s.limiarizacao_adaptativa_otsu(img_carregada, 11, 2)
+    else:
+        return
+    
+    exibir_imagem(img_segmentada)
+
+def aplicar_morfologia_binaria(tipo_operacao):
+    if img_carregada is None:
+        return
+    
+    limiar_global = s.calcular_limiar_global(img_carregada)
+    
+    img_segmentada = s.limiarizacao_binaria(img_carregada, limiar_global)
+
+    kernel = np.array([[1, 1, 1],
+                       [1, 1, 1],
+                       [1, 1, 1]], dtype=np.uint8)
+
+    if tipo_operacao == 0:
+        img_morfologica = m.erodir(img_segmentada, kernel)
+    elif tipo_operacao == 1:
+        img_morfologica = m.dilatar(img_segmentada, kernel)
+    elif tipo_operacao == 2:
+        img_auxiliar = m.erodir(img_segmentada, kernel)
+        img_morfologica = m.dilatar(img_auxiliar, kernel)
+    elif tipo_operacao == 3:
+        img_auxiliar = m.dilatar(img_segmentada, kernel)
+        img_morfologica = m.erodir(img_auxiliar, kernel)
+    else:
+        return
+    
+    exibir_imagem(img_morfologica)
+
+def aplicar_morfologia_adaptativa(tipo_operacao):
+    if img_carregada is None:
+        return
+    
+    img_segmentada = s.limiarizacao_adaptativa_otsu(img_carregada, 11, 3)
+
+    kernel = np.array([[1, 1, 1],
+                       [1, 1, 1],
+                       [1, 1, 1]], dtype=np.uint8)
+
+    if tipo_operacao == 0:
+        img_morfologica = m.erodir(img_segmentada, kernel)
+    elif tipo_operacao == 1:
+        img_morfologica = m.dilatar(img_segmentada, kernel)
+    elif tipo_operacao == 2:
+        img_auxiliar = m.erodir(img_segmentada, kernel)
+        img_morfologica = m.dilatar(img_auxiliar, kernel)
+    elif tipo_operacao == 3:
+        img_auxiliar = m.dilatar(img_segmentada, kernel)
+        img_morfologica = m.erodir(img_auxiliar, kernel)
+    else:
+        return
+    
+    exibir_imagem(img_morfologica)
 
 def limpar_tela():
     tela_imagem_editada.delete("all")
@@ -139,9 +164,7 @@ aplicativo.config(menu = menu_apk)
 #Menu do Arquivo
 arquivo_menu = tk.Menu(menu_apk, tearoff=0)
 menu_apk.add_cascade(label="Arquivo", menu=arquivo_menu)
-arquivo_menu.add_command(label="Carregar Imagem", command=carregar_imagem)
-arquivo_menu.add_separator()
-arquivo_menu.add_command(label="Carregar Imagem Cinza", command=lambda: carregar_imagem("acinzentar"))
+arquivo_menu.add_command(label="Carregar Imagem", command=lambda: carregar_imagem("acinzentar"))
 arquivo_menu.add_separator()
 arquivo_menu.add_command(label="Sair", command=aplicativo.quit)
 
@@ -159,19 +182,50 @@ submenu_passa_baixa.add_command(label="Filtro Gaussiano", command=lambda:aplicar
 
 #Submenu Filtros Passa-Alta
 submenu_passa_alta = tk.Menu(filtros_menu, tearoff=0)
-submenu_passa_alta.add_command(label="Filtro Sobel Horizontal", command=lambda:aplicar_filtros_pa(0)) 
+submenu_passa_alta.add_command(label="Filtro Sobel", command=lambda:aplicar_filtros_pa(0)) 
 submenu_passa_alta.add_separator()
-submenu_passa_alta.add_command(label="Filtro Sobel Vertical", command=lambda:aplicar_filtros_pa(1)) 
+submenu_passa_alta.add_command(label="Filtro Canny", command=lambda:aplicar_filtros_pa(1)) 
 submenu_passa_alta.add_separator()
-submenu_passa_alta.add_command(label="Filtro Sobel", command=lambda:aplicar_filtros_pa(2)) 
-submenu_passa_alta.add_separator()
-submenu_passa_alta.add_command(label="Filtro Canny", command=lambda:aplicar_filtros_pa(3)) 
-submenu_passa_alta.add_separator()
-submenu_passa_alta.add_command(label="Filtro Laplaciano", command=lambda:aplicar_filtros_pa(4))
+submenu_passa_alta.add_command(label="Filtro Laplaciano", command=lambda:aplicar_filtros_pa(2))
 
-# Adiciona os submenus ao menu principal Filtros
+# Adiciona os submenus de filtro ao menu principal "Filtros"
 filtros_menu.add_cascade(label="Passa-Baixa", menu=submenu_passa_baixa)
 filtros_menu.add_cascade(label="Passa-Alta", menu=submenu_passa_alta)
+
+#Menu de Segmentação
+segmentacao_menu = tk.Menu(menu_apk, tearoff=0)
+menu_apk.add_cascade(label="Segmentação", menu=segmentacao_menu)
+segmentacao_menu.add_command(label="Limiarização Binária", command=lambda:aplicar_limiarizacao(0))
+segmentacao_menu.add_separator()
+segmentacao_menu.add_command(label="Limiarização Adaptativa", command=lambda:aplicar_limiarizacao(1))
+
+#Menu da Morfologia
+morfologia_menu = tk.Menu(menu_apk, tearoff=0)
+menu_apk.add_cascade(label="Operações Morfológias", menu=morfologia_menu)
+
+#Submenu Morfologia com Segmentação Binária
+submenu_morfologia_binaria = tk.Menu(morfologia_menu, tearoff=0)
+submenu_morfologia_binaria.add_command(label="Erosão", command=lambda:aplicar_morfologia_binaria(0))
+submenu_morfologia_binaria.add_separator()
+submenu_morfologia_binaria.add_command(label="Dilatação", command=lambda:aplicar_morfologia_binaria(1))
+submenu_morfologia_binaria.add_separator()
+submenu_morfologia_binaria.add_command(label="Erodir e Dilatar", command=lambda:aplicar_morfologia_binaria(2))
+submenu_morfologia_binaria.add_separator()
+submenu_morfologia_binaria.add_command(label="Dilatar e Erodir", command=lambda:aplicar_morfologia_binaria(3))
+
+#Submenu Morfologia com Segmentação Adaptativa
+submenu_morfologia_adaptativa = tk.Menu(morfologia_menu, tearoff=0)
+submenu_morfologia_adaptativa.add_command(label="Erosão", command=lambda:aplicar_morfologia_adaptativa(0))
+submenu_morfologia_adaptativa.add_separator()
+submenu_morfologia_adaptativa.add_command(label="Dilatação", command=lambda:aplicar_morfologia_adaptativa(1))
+submenu_morfologia_adaptativa.add_separator()
+submenu_morfologia_adaptativa.add_command(label="Erodir e Dilatar", command=lambda:aplicar_morfologia_binaria(2))
+submenu_morfologia_adaptativa.add_separator()
+submenu_morfologia_adaptativa.add_command(label="Dilatar e Erodir", command=lambda:aplicar_morfologia_binaria(3))
+
+# Adiciona os submenus morfologicos ao menu principal "Morfologia"
+morfologia_menu.add_cascade(label="Com limiarização binária", menu=submenu_morfologia_binaria)
+morfologia_menu.add_cascade(label="Com limiarização adaptativa", menu=submenu_morfologia_adaptativa)
 
 #Cria a tela onde fica a imagem original
 tela_imagem_original = tk.Canvas(aplicativo, width=500, height=550, bg="#2e2e2e", highlightthickness=1, highlightbackground="gray")
