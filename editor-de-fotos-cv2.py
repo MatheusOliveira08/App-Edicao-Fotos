@@ -190,11 +190,16 @@ def aplicar_limiarizacao_adaptativa(blockSize, C, maxval=255):
         print("Nenhuma imagem carregada ou processada.")
         return
     
+    if len(img_processada.shape) == 3:  # Verifica se a imagem é colorida
+        img_processada_cinza = cv2.cvtColor(img_processada, cv2.COLOR_BGR2GRAY)
+    else:
+        img_processada_cinza = img_processada.copy()
+    
     if blockSize % 2 == 0:
         blockSize += 1  # blockSize deve ser ímpar
 
     # Limiarização Adaptativa
-    img_temp = cv2.adaptiveThreshold(img_processada, maxval, cv2.ADAPTIVE_THRESH_GAUSSIAN_C,
+    img_temp = cv2.adaptiveThreshold(img_processada_cinza, maxval, cv2.ADAPTIVE_THRESH_GAUSSIAN_C,
                                      cv2.THRESH_BINARY, blockSize, C)
     exibir_imagem(img_temp)
 
